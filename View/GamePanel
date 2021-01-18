@@ -1,0 +1,522 @@
+using System.Collections;
+using System.Collections.Generic;
+using System.Data;
+using System.Diagnostics;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
+public class GamePanel : MonoBehaviour//游戏界面
+{
+    #region UI控件
+    public Text text_score;      //分数
+    public Text text_best_score;//最高分
+    public Button btn_last;     //上一步
+    public Button btn_restart;  //重新开始
+    public Button btn_exit;     //退出
+    public WinPanel winPanel;//获胜界面
+    public LosePanel losePanel;//失败界面
+    #endregion
+
+    #region 属性 变量
+    public Transform gridParent;//格子的父物体
+    public GameObject gridPrefab;
+    public GameObject numberPrefab;
+    public int currentScore;//当前分数
+    public StepModel lastStepModel;//上一步的数据
+
+    public Dictionary<int, int> grid_config = new Dictionary<int, int>() { { 4, 140 }, { 5, 110 }, { 6, 91 } };
+    public MyGrid[][] grids = null;//所有格子
+    public List<MyGrid> canCreateNumberGrid = new List<MyGrid>();//可以创建数字的格子
+
+    private int row;//行
+    private int col;//列
+    private bool needCreateNumber = false;
+    #endregion
+
+    #region 游戏逻辑
+    //初始化格子
+    public void InitGrid()
+    {
+        //获取格子数量
+        int gridNum = PlayerPrefs.GetInt(Const.GameModel, 4);
+        GridLayoutGroup gridLayoutGroup = gridParent.GetComponent<GridLayoutGroup>();
+        gridLayoutGroup.constraintCount = gridNum;
+        gridLayoutGroup.cellSize = new Vector2(grid_config[gridNum], grid_config[gridNum]);
+
+        //初始化格子
+        grids = new MyGrid[gridNum][];
+
+        //创建格子
+        row = gridNum;
+        col = gridNum;
+
+        for (int i = 0; i < row; i++)
+            for (int j = 0; j < col; j++)
+            {
+                if (grids[i] == null)
+                    grids[i] = new MyGrid[gridNum];
+                //创建第i行、第j列的格子
+                grids[i][j] = CreateGrid();
+            }
+    }
+
+    //创建格子
+    public MyGrid CreateGrid()
+    {
+        //实例化格子预制体
+        GameObject gameObject = GameObject.Instantiate(gridPrefab, gridParent);
+        return gameObject.GetComponent<MyGrid>();
+    }
+
+    //创建数字
+    public void CreateNumber()
+    {
+        //找到数字所在的格子
+        canCreateNumberGrid.Clear();
+        for (int i = 0; i < row; i++)
+            for (int j = 0; j < col; j++)
+                if (!grids[i][j].HasNumber())//判断格子有没有数字
+                    //如果没有格子
+                    canCreateNumberGrid.Add(grids[i][j]);
+        if (canCreateNumberGrid.Count == 0)
+            return;
+
+        //随机一个格子
+        int index = Random.Range(0, canCreateNumberGrid.Count);
+
+        //创建数字 把数字放进格子
+        GameObject gameObj = GameObject.Instantiate(numberPrefab, canCreateNumberGrid[index].transform);
+        gameObj.GetComponent<Number>().Init(canCreateNumberGrid[index]);//进行初始化
+    }
+    
+    //重载函数，在特定格子创建特定数字，用于实现“上一步”
+    public void CreateNumber(MyGrid myGrid,int number)
+    {
+        GameObject gameObj = GameObject.Instantiate(numberPrefab, myGrid.transform);
+        gameObj.GetComponent<Number>().Init(myGrid);//进行初始化
+        gameObj.GetComponent<Number>().SetNumber(number);
+    }
+
+    //移动类型
+    public MoveType CalculateMoveType()
+    {
+        if (Input.GetKeyDown(KeyCode.DownArrow)||Input.GetKeyDown("s"))
+            return MoveType.DOWN;
+        else if (Input.GetKeyDown(KeyCode.UpArrow)||Input.GetKeyDown("w"))
+            return MoveType.UP;
+        else if (Input.GetKeyDown(KeyCode.LeftArrow)||Input.GetKeyDown("a"))
+            return MoveType.LEFT;
+        else if (Input.GetKeyDown(KeyCode.RightArrow)||Input.GetKeyDown("d"))
+            return MoveType.RIGHT;
+        else
+            return MoveType.ERROR;
+    }
+
+    //移动数字
+    public void MoveNumber(MoveType moveType)
+    {
+        switch (moveType)
+        {
+            case MoveType.DOWN:
+                for (int j = 0; j < col; j++)
+                    for (int i = row - 2; i >= 0; i--)
+                        if (grids[i][j].HasNumber())
+                        {
+                            Number number = grids[i][j].GetNumber();
+
+                            for (int m = i + 1; m < row; m++)
+                            {
+                                Number targetNumber = null;
+                                if (grids[m][j].HasNumber())
+                                    targetNumber = grids[m][j].GetNumber();
+
+                                HandleNumber(number, targetNumber, grids[m][j]);
+                                if (targetNumber != null)//如果有数字跳出循环
+                                    break;
+                            }
+                        }
+                break;
+            case MoveType.UP:
+                for (int j = 0; j < col; j++)
+                    for (int i = 1; i < row; i++)
+                        if (grids[i][j].HasNumber())
+                        {
+                            Number number = grids[i][j].GetNumber();
+
+                            for (int m = i - 1; m >= 0; m--)
+                            {
+                                Number targetNumber = null;
+                                if (grids[m][j].HasNumber())
+                                    targetNumber = grids[m][j].GetNumber();
+
+                                HandleNumber(number, targetNumber, grids[m][j]);
+                                if (targetNumber != null)//如果有数字跳出循环
+                                    break;
+                            }
+                        }
+                break;
+            case MoveType.LEFT:
+                for (int i = 0; i < row; i++)
+                    for (int j = 1; j < col; j++)
+                        if (grids[i][j].HasNumber())
+                        {
+                            Number number = grids[i][j].GetNumber();
+
+                            for (int m = j - 1; m >= 0; m--)
+                            {
+                                Number targetNumber = null;
+                                if (grids[i][m].HasNumber())
+                                    targetNumber = grids[i][m].GetNumber();
+
+                                HandleNumber(number, targetNumber, grids[i][m]);
+                                if (targetNumber != null)//如果有数字跳出循环
+                                    break;
+                            }
+                        }
+                break;
+            case MoveType.RIGHT:
+                for (int i = 0; i < row; i++)
+                    for (int j = col - 2; j >= 0; j--)
+                        if (grids[i][j].HasNumber())
+                        {
+                            Number number = grids[i][j].GetNumber();
+
+                            for (int m = j + 1; m < col; m++)
+                            {
+                                Number targetNumber = null;
+                                if (grids[i][m].HasNumber())
+                                    targetNumber = grids[i][m].GetNumber();
+
+                                HandleNumber(number, targetNumber, grids[i][m]);
+                                if (targetNumber != null)//如果有数字跳出循环
+                                    break;
+                            }
+                        }
+                break;
+            default:
+                break;
+        }
+    }
+
+    //处理数字的合并和移动
+    public void HandleNumber(Number current, Number target, MyGrid targetGrid)
+    {
+        //判断能否合并
+        if (target != null)
+        {
+            if (current.GetNumber() == target.GetNumber() && target.status == NumberStatus.Normal)
+            {
+                target.Merge();
+
+                //销毁当前数字
+                current.GetGrid().SetNumber(null);
+                GameObject.Destroy(current.gameObject);
+                needCreateNumber = true;
+            }
+        }
+        else
+        {
+            //没有数字则把格子移动上去
+            current.MoveToGrid(targetGrid);
+            needCreateNumber = true;
+        }
+    }
+
+    //重置数字状态
+    public void ResetNumberStatus()
+    {
+        //遍历所有的数字
+        for (int i = 0; i < row; i++)
+            for (int j = 0; j < col; j++)
+                if (grids[i][j].HasNumber())//判断格子有没有数字                
+                    grids[i][j].GetNumber().status = NumberStatus.Normal;
+    }
+
+    //判断游戏是否失败
+    public bool IsGameLose()
+    {
+        //判断格子是否已满
+        for (int i = 0; i < row; i++)
+            for (int j = 0; j < col; j++)
+                if (!grids[i][j].HasNumber())
+                    return false;
+        //判断有没有数字能合并
+        for(int i=0;i<row;i++)
+            for(int j=0;j<col;j++)
+            {
+                MyGrid up = HasGrid(i-1,j)?grids[i - 1][j]:null;
+                MyGrid down = HasGrid(i + 1, j) ?grids[i + 1][j]:null;
+                MyGrid left = HasGrid(i , j-1) ?grids[i][j - 1]:null;
+                MyGrid right = HasGrid(i , j+1) ?grids[i][j + 1]:null;
+
+                if(up!=null)
+                {
+                    if (grids[i][j].GetNumber().GetNumber() == up.GetNumber().GetNumber())
+                        return false;
+                }
+                if (down != null)
+                {
+                    if (grids[i][j].GetNumber().GetNumber() == down.GetNumber().GetNumber())
+                        return false;
+                }
+                if (left != null)
+                {
+                    if (grids[i][j].GetNumber().GetNumber() == left.GetNumber().GetNumber())
+                        return false;
+                }
+                if (right != null)
+                {
+                    if (grids[i][j].GetNumber().GetNumber() == right.GetNumber().GetNumber())
+                        return false;
+                }
+            }
+        return true;//游戏失败
+    }
+
+    //判断是否有格子
+    public bool HasGrid(int i,int j)
+    {
+        if (i >= 0 && i < row && j >= 0 && j < col)
+            return true;
+        return false;
+    }
+    #endregion
+
+    #region 脚本周期
+    private void Awake()
+    {
+        //初始化界面信息
+        InitPanelMessage();
+        //初始化格子
+        InitGrid();
+        //创建第一个数字
+        CreateNumber();
+    }
+
+    private void Update()
+    {
+        MoveType moveType = CalculateMoveType();
+        if (moveType == MoveType.ERROR)
+            return;
+
+        int gridNum = PlayerPrefs.GetInt(Const.GameModel, 4);
+        //保存状态
+        switch (gridNum)
+        {
+            case 4:
+                lastStepModel.UpdateData(currentScore, PlayerPrefs.GetInt(Const.BestScore4, 0), grids);
+                break;
+            case 5:
+                lastStepModel.UpdateData(currentScore, PlayerPrefs.GetInt(Const.BestScore5, 0), grids);
+                break;
+            case 6:
+                lastStepModel.UpdateData(currentScore, PlayerPrefs.GetInt(Const.BestScore6, 0), grids);
+                break;
+            default:
+                break;
+        }
+        btn_last.interactable = true;
+
+        MoveNumber(moveType);
+
+        //产生数字
+        if (needCreateNumber)
+            CreateNumber();
+
+        //把所有数字的状态恢复成正常状态
+        ResetNumberStatus();
+        needCreateNumber = false;
+
+        //判断游戏是否结束
+        if (IsGameLose())
+        {//游戏结束
+            GameLose();
+        }
+    }
+    #endregion
+
+    #region 事件监听
+    //点击上一步
+    public void OnLastClick()
+    {
+        BackToLastStep();
+        btn_last.interactable = false;
+    }
+
+    //重新开始
+    public void OnRestartClick()
+    {
+        RestartGame();
+    }
+
+    //退出
+    public void OnExitClick()
+    {
+        ExitGame();
+    }
+    #endregion
+
+    #region 页面更新
+    //初始化界面信息
+    public void InitPanelMessage()
+    {
+        int gridNum = PlayerPrefs.GetInt(Const.GameModel, 4);
+
+        switch(gridNum)
+        {
+            case 4:
+                this.text_best_score.text = PlayerPrefs.GetInt(Const.BestScore4, 0).ToString();
+                break;
+            case 5:
+                this.text_best_score.text = PlayerPrefs.GetInt(Const.BestScore5, 0).ToString();
+                break;
+            case 6:
+                this.text_best_score.text = PlayerPrefs.GetInt(Const.BestScore6, 0).ToString();
+                break;
+            default:
+                break;
+        }
+        
+        lastStepModel = new StepModel();
+        btn_last.interactable = false;
+    }
+    //增加分数
+    public void AddScore(int score)
+    {
+        currentScore += score;
+        UpdateScore(currentScore);
+        int gridNum = PlayerPrefs.GetInt(Const.GameModel, 4);
+        //判断当前分数是否为最高分
+        switch (gridNum)
+        {
+            case 4:
+                if (currentScore > PlayerPrefs.GetInt(Const.BestScore4, 0))
+                {
+                    PlayerPrefs.SetInt(Const.BestScore4, currentScore);
+                    UpdateBestScore(currentScore);
+                }
+                break;
+            case 5:
+                if (currentScore > PlayerPrefs.GetInt(Const.BestScore5, 0))
+                {
+                    PlayerPrefs.SetInt(Const.BestScore5, currentScore);
+                    UpdateBestScore(currentScore);
+                }
+                break;
+            case 6:
+                if (currentScore > PlayerPrefs.GetInt(Const.BestScore6, 0))
+                {
+                    PlayerPrefs.SetInt(Const.BestScore6, currentScore);
+                    UpdateBestScore(currentScore);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    //更新分数
+    public void UpdateScore(int score)
+    {
+        this.text_score.text = score.ToString();
+    }
+    //清空分数
+    public void ResetScore()
+    {
+        currentScore = 0;
+        UpdateScore(currentScore);
+    }
+    //更新最高分
+    public void UpdateBestScore(int bestScore)
+    {
+        this.text_best_score.text = bestScore.ToString();
+    }
+    #endregion
+
+    #region 游戏流程
+    //返回上一步
+    public void BackToLastStep()
+    {
+        //分数
+        currentScore = lastStepModel.score;
+        UpdateScore(currentScore);
+        int gridNum = PlayerPrefs.GetInt(Const.GameModel, 4);
+
+        switch (gridNum)
+        {
+            case 4:
+                PlayerPrefs.SetInt(Const.BestScore4, lastStepModel.bestScore);
+                break;
+            case 5:
+                PlayerPrefs.SetInt(Const.BestScore5, lastStepModel.bestScore);
+                break;
+            case 6:
+                PlayerPrefs.SetInt(Const.BestScore6, lastStepModel.bestScore);
+                break;
+            default:
+                break;
+        }
+        
+        UpdateBestScore(lastStepModel.bestScore);
+        //数字
+        for(int i=0;i<row;i++)
+            for(int j=0;j<col;j++)
+            {
+                if(lastStepModel.numbers[i][j]==0)
+                    if(grids[i][j].HasNumber())
+                    {
+                        GameObject.Destroy(grids[i][j].GetNumber().gameObject);
+                        grids[i][j].SetNumber(null);
+                    }
+                
+                else if(lastStepModel.numbers[i][j]!=0)
+                {
+                    if (grids[i][j].HasNumber())
+                        //修改数字
+                        grids[i][j].GetNumber().SetNumber(lastStepModel.numbers[i][j]);
+                    
+                    else
+                        //创建数字
+                        CreateNumber(grids[i][j], lastStepModel.numbers[i][j]);
+                    
+                }
+            }
+    }
+
+    //退出游戏，返回目录
+    public void ExitGame() 
+    {
+        SceneManager.LoadSceneAsync(0);
+    }
+    
+    //重新开始游戏
+    public void RestartGame() 
+    {
+        btn_last.interactable = false;
+        //清空分数 
+        ResetScore();
+        //清空数字
+        for(int i=0;i<row;i++)
+            for(int j=0;j<col;j++)
+                if(grids[i][j].HasNumber())
+                {
+                    GameObject.Destroy(grids[i][j].GetNumber().gameObject);
+                    grids[i][j].SetNumber(null);
+                }
+        
+        //创建数字
+        CreateNumber();
+    }
+    //游戏胜利
+    public void GameWin()
+    {
+        winPanel.Show();
+    }
+    //游戏失败
+    public void GameLose()
+    {
+        losePanel.Show();
+    }
+    #endregion
+
+}
