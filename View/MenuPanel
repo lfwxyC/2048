@@ -1,0 +1,22 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class MenuPanel : MonoBehaviour//菜单
+{
+    public SelectModelPanel selectModelPanel;//选择模式
+
+    //点击开始游戏
+    public void OnStartGameClick()
+    {
+        //显示选择模式的界面
+        selectModelPanel.Show();
+    }
+
+    //点击退出游戏
+    public void OnExitClick()
+    {
+        //退出游戏
+        Application.Quit();
+    }
+}
