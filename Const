@@ -1,0 +1,11 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Const//定义相关的常量
+{
+    public const string GameModel = "game_model";//游戏模式 4*4 5*5 6*6
+    public const string BestScore4 = "BestScore4";//最高分
+    public const string BestScore5 = "BestScore5";
+    public const string BestScore6 = "BestScore6";
+}
