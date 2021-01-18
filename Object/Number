@@ -1,0 +1,164 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class Number : MonoBehaviour//数字
+{
+    private Image bg;
+    private MyGrid inGrid;//这个数字所在的格子
+    //private Text number_text;
+    private int digit;
+
+    private float spawnScaleTime = 1;
+    private bool playSpawnAnim = false;
+
+    private float mergeScaleTime = 1;
+    private float mergeScaleTimeBack = 1;
+    private bool playMergeAnim = false;
+
+    private float movePosTime = 1;
+    private bool move = false;
+    private Vector3 startMovePos;
+
+    public NumberStatus status;//数字的状态，表示能否合并
+    public Sprite[] sprites;//数字对应的图片
+    public List<int> number_index;
+
+    private void Awake()
+    {
+        bg = transform.GetComponent<Image>();
+        //number_text = transform.Find("Text").GetComponent<Text>();
+    }
+    
+    //初始化
+    public void Init(MyGrid my_grid)
+    {
+        my_grid.SetNumber(this);
+        //设置所在的格子
+        this.SetGrid(my_grid);
+        //给它一个初始化的数字
+        this.SetNumber(2);
+        status = NumberStatus.Normal;
+        PlaySpawnAnim();//播放动画
+    }
+
+    //设置格子
+    public void SetGrid(MyGrid my_grid)
+    {
+        this.inGrid = my_grid;
+    }
+
+    //获取格子
+    public MyGrid GetGrid()
+    {
+        return this.inGrid;
+    }
+
+    //设置数字
+    public void SetNumber(int number)
+    {
+        //this.number_text.text = number.ToString();
+        digit = number;
+        this.bg.sprite = sprites[number_index.IndexOf(number)];
+    }
+
+    //获取数字
+    public int GetNumber()
+    {
+        //return int.Parse(number_text.text);
+        return digit;
+    }
+
+    //把这个数字移动到某一个格子的下面
+    public void MoveToGrid(MyGrid my_grid)
+    {
+        transform.SetParent(my_grid.transform);
+        startMovePos = transform.localPosition;
+        move = true;
+        movePosTime = 0;
+
+        this.GetGrid().SetNumber(null);
+
+        //设置格子
+        my_grid.SetNumber(this);
+        this.SetGrid(my_grid);
+    }
+
+    //合并
+    public void Merge()
+    {
+        GamePanel gamePanel = GameObject.Find("Canvas/GamePanel").GetComponent<GamePanel>();
+
+        gamePanel.AddScore(this.GetNumber());//要增加的分数
+        int number = this.GetNumber() * 2;
+
+        this.SetNumber(number);
+        
+        if(number==2048)
+        {
+            //游戏胜利
+            gamePanel.GameWin();
+        }
+        status = NumberStatus.NotMerge;
+
+        //播放合并动画
+        PlayMergeAnim();
+    }
+
+    //播放创建动画
+    public void PlaySpawnAnim()
+    {
+        spawnScaleTime = 0;
+        playSpawnAnim = true;
+    }
+
+    //播放合并动画
+    public void PlayMergeAnim()
+    {
+        mergeScaleTime = 0;
+        mergeScaleTimeBack = 0;
+        playMergeAnim = true;
+    }
+
+    private void Update()
+    {
+        //创建动画
+        if(playSpawnAnim)
+        {
+            if (spawnScaleTime <= 1)
+            {
+                spawnScaleTime += Time.deltaTime * 4;
+                transform.localScale = Vector3.Lerp(Vector3.zero, Vector3.one, spawnScaleTime);
+            }
+            else
+                playSpawnAnim = false;
+        }
+            
+        //合并动画
+        if(playMergeAnim)
+        {
+            if (mergeScaleTime <= 1 && mergeScaleTimeBack == 0)//变大的过程
+            {
+                mergeScaleTime += Time.deltaTime * 4;
+                transform.localScale = Vector3.Lerp(Vector3.one, Vector3.one * 1.2f, mergeScaleTime);
+            }
+            if (mergeScaleTime > 1 && mergeScaleTimeBack <= 1)
+            {
+                mergeScaleTimeBack += Time.deltaTime * 4;
+                transform.localScale = Vector3.Lerp(Vector3.one * 1.2f, Vector3.one, mergeScaleTimeBack);
+            }
+            if(mergeScaleTime>1&&mergeScaleTimeBack>1)
+                playMergeAnim = false;
+        }        
+
+        //移动动画
+        if(move)
+        {
+            movePosTime += Time.deltaTime * 5;
+            transform.localPosition = Vector3.Lerp(startMovePos, Vector3.zero, movePosTime);
+            if (movePosTime >= 1)
+                move = false;
+        }
+    }
+}
