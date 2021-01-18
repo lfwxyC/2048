@@ -1,0 +1,31 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class StepModel//保存每一步的数据，用于实现“上一步”
+{
+    public int score;//分数
+    public int bestScore;//最高分
+    public int[][] numbers;//数字
+
+    //更新数据
+    public void UpdateData(int score,int bestScore,MyGrid[][] grids)
+    {
+        this.score = score;
+        this.bestScore = bestScore;
+
+        if(numbers==null)
+        {
+            numbers = new int[grids.Length][];
+        }
+        
+        for(int i=0;i<grids.Length;i++)
+            for(int j=0;j<grids[i].Length;j++)
+            {
+                if(numbers[i]==null)
+                    numbers[i] = new int[grids[i].Length];
+                
+                numbers[i][j] = grids[i][j].HasNumber()?grids[i][j].GetNumber().GetNumber():0;
+            }
+    }
+}
